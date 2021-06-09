@@ -4,7 +4,6 @@ using UnityEngine;
 
 public static class Constants
 {
-    public const int NumSpheres = 50;
     // UI
     public const float HorizontalScreenPanelWidth = 0.3f;
     public const int AbsoluteOffsetPixels = 30;
