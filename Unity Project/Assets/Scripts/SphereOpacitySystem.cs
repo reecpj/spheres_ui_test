@@ -10,89 +10,118 @@ using UnityEngine.UI;
 /// </summary>
 public class SphereOpacitySystem : MonoBehaviour
 {
+
     // Parent for all spheres in the hierarchy
-    [SerializeField] private Transform SpheresParent;
-    // The first slider for controlling all spheres is present in the scene
-    [SerializeField] private GameObject SliderPanel;
-    [SerializeField] private GameObject SpherePrefab;
+    [SerializeField] private Transform _spheresParent;
+    // The master slider for controlling all spheres is present in the scene
+    [SerializeField] private MasterSlider _masterSlider;
+
+    // Fields to be filled in from the Project's assets
+    [SerializeField] private GameObject _sliderPrefab;
+    [SerializeField] private GameObject _spherePrefab;
     // This opaque material is shared across all opaque spheres to reduce draw calls
-    [SerializeField] private Material OpaqueSphereMaterial;
-    private Material _previousOpaqueMaterial;
+    [SerializeField] private Material _opaqueSphereMaterial;
     // This shader is used on each material instance of each transparent sphere.
     // Changing the OpaqueSphereMaterial will update the transparent material
     // instances, using this shader.
-    [SerializeField] private Shader FadeSphereShader;
+    [SerializeField] private Shader _fadeSphereShader;
 
-    [SerializeField] private int NumSpheres = 50;
+    // references to scene components
+    private Transform _sliderParent;
+    private AdjustGridCellSize _adjustGridCellSize;
 
-    private SliderOpacityPanel[] _opacityPanels;
-    private Transform[] _sphereTransforms;
+    private Material _previousOpaqueMaterial;
+
+    // Number of spheres can be changed from UI
+    [SerializeField] private int _numSpheres = 50;
+    // Record previous number to refresh only when the number of spheres changes
+    private int _previousNumSpheres;
+
+    private List<SliderOpacityPanel> _opacityPanels;
+
     void Start()
     {
-        // set up spheres with sliders
-        var sliderParent = SliderPanel.transform.parent;
-        _opacityPanels = new SliderOpacityPanel[NumSpheres];
-        _sphereTransforms = new Transform[NumSpheres];
-        for (int i = 0; i < NumSpheres; ++i)
-        {
-            var sphereGameObject = GameObject.Instantiate(SpherePrefab, SpheresParent);
-            sphereGameObject.name = "Sphere " + (i + 1);
-            var sliderPanel = GameObject.Instantiate(SliderPanel, sliderParent);
-            var sliderOpacityPanel = sliderPanel.GetComponent<SliderOpacityPanel>();
-            sliderOpacityPanel.Setup(sphereGameObject, sphereGameObject.name);
-            sliderOpacityPanel.ChangeMaterial(OpaqueSphereMaterial, FadeSphereShader);
-            _opacityPanels[i] = sliderOpacityPanel;
-            _sphereTransforms[i] = sphereGameObject.transform;
-        }
-        // set up master slider
-        var masterSlider = SliderPanel.AddComponent<MasterSlider>();
-        masterSlider.Setup(_opacityPanels);
+        _opacityPanels = new List<SliderOpacityPanel>(_numSpheres);
 
-        ViewportSizeChange.OnViewportChanged += ReflowSpheresToFitScreen;
+        // set up refs from hierarchy
+        _sliderParent = _masterSlider.transform.parent;
+        _adjustGridCellSize = _spheresParent.GetComponentInParent<AdjustGridCellSize>();
+
+        // generate spheres and sliders
+        _previousNumSpheres = 0;
+        GeneratedNeededSpheres();
+
+        // set up master slider
+        _masterSlider.Setup(_opacityPanels);
     }
 
     /// <summary>
-    /// When the screen window changes, create a grid of vectors in 2D space
-    /// on the right side of the screen, and project from the camera onto a
-    /// plane to find the sphere's 3d positions
+    /// Generate new spheres or delete unnecessary spheres
+    /// if the number of spheres changes at runtime.
     /// </summary>
-    /// <param name="screenRes"></param>
-    private void ReflowSpheresToFitScreen(Vector2 screenRes)
+    private void GeneratedNeededSpheres()
     {
-        var camera = Camera.main;
-        float pixelScaleFactor = HelperFunctions.GetUiScaleFactor(screenRes,
-            Constants.ReferenceScreenResolution, Constants.SphereScaleMatchWidthOrHeight);
-        float padding = pixelScaleFactor * Constants.SpherePixelsPadding;
-        float sphereWorldScale = Constants.SphereScale;
-        // fit more spheres on screen when in vertical aspect ratio
-        if (screenRes.y / screenRes.x > 1.3f)
-            sphereWorldScale *= 0.8f;
-        Plane gridPlane = new Plane(Vector3.forward, 0);
-        float pixelOffset = (sphereWorldScale * pixelScaleFactor * Constants.PixelsPerSphere) + padding;
-        var startPixelCoord = new Vector2(
-            screenRes.x * Constants.HorizontalScreenPanelWidth + padding + pixelOffset * 0.5f,
-            screenRes.y - padding - pixelOffset);
-        Vector3 positionScreenSpace = new Vector3(startPixelCoord.x, startPixelCoord.y, 0);
-        foreach (var sphereTransform in _sphereTransforms)
+        if (_numSpheres < 0)
+            _numSpheres = 0;
+        var numRequiredSpheres = _numSpheres - _previousNumSpheres;
+
+        if (numRequiredSpheres < 0)
         {
-            // get 3D position from screen space grid coordinate
-            Ray fromCamera = camera.ScreenPointToRay(positionScreenSpace);
-            gridPlane.Raycast(fromCamera, out var t);
-            sphereTransform.position = fromCamera.origin + fromCamera.direction * t;
-            sphereTransform.localScale = new Vector3(sphereWorldScale, sphereWorldScale, sphereWorldScale);
-            positionScreenSpace.x += pixelOffset;
-            // if close to the edge of the screen, move down a row
-            if (positionScreenSpace.x > screenRes.x - padding - pixelOffset * 0.5f)
+            // remove unnecessary spheres and sliders, starting from the end and working backwards
+            var numSpheresToRemove = -numRequiredSpheres;
+            var finalSphereIndex = _spheresParent.childCount - 1;
+            var finalSliderIndex = _previousNumSpheres - 1;
+
+            for (int removalIndex = 0; removalIndex < numSpheresToRemove; ++removalIndex)
             {
-                positionScreenSpace.x = startPixelCoord.x;
-                positionScreenSpace.y -= pixelOffset;
+                // destroy slider
+                var listRemovalIndex = finalSliderIndex - removalIndex;
+                var sliderPanelToDestroy = _opacityPanels[listRemovalIndex].gameObject;
+                Destroy(sliderPanelToDestroy);
+
+                // destroy sphere
+                var parentChildRemovalIndex = finalSphereIndex - removalIndex;
+                var createdSphere = _spheresParent.GetChild(parentChildRemovalIndex).gameObject;
+                Destroy(createdSphere);
+            }
+
+            // update slider panels list
+            _opacityPanels.RemoveRange(_numSpheres, numSpheresToRemove);
+        }
+        else
+        {
+            // generate needed spheres
+            for (int creationIndex = 0; creationIndex < numRequiredSpheres; ++creationIndex)
+            {
+                // create spheres
+                var sphereGameObject = GameObject.Instantiate(_spherePrefab, _spheresParent);
+                var absoluteSphereIndex = _previousNumSpheres + creationIndex;
+                var sphereLabel = "Sphere " + (absoluteSphereIndex + 1);
+                sphereGameObject.name = "UI " + sphereLabel;
+
+                // create sliders
+                var sliderPanel = GameObject.Instantiate(_sliderPrefab, _sliderParent);
+                var sliderOpacityPanel = sliderPanel.GetComponent<SliderOpacityPanel>();
+                sliderOpacityPanel.Setup(sphereGameObject, sphereLabel);
+                sliderOpacityPanel.ChangeMaterial(_opaqueSphereMaterial, _fadeSphereShader);
+
+                _opacityPanels.Add(sliderOpacityPanel);
             }
         }
+
+        _adjustGridCellSize.UpdateNumCells(_numSpheres);
+
+        _previousNumSpheres = _numSpheres;
     }
 
     void Update()
     {
-        if (OpaqueSphereMaterial != _previousOpaqueMaterial)
+        if (_previousNumSpheres != _numSpheres)
+        {
+            GeneratedNeededSpheres();
+        }
+
+        if (_opaqueSphereMaterial != _previousOpaqueMaterial)
         {
             ChangeMaterial();
         }
@@ -103,9 +132,9 @@ public class SphereOpacitySystem : MonoBehaviour
     {
         foreach (var opacityPanel in _opacityPanels)
         {
-            opacityPanel.ChangeMaterial(OpaqueSphereMaterial, FadeSphereShader);
+            opacityPanel.ChangeMaterial(_opaqueSphereMaterial, _fadeSphereShader);
         }
 
-        _previousOpaqueMaterial = OpaqueSphereMaterial;
+        _previousOpaqueMaterial = _opaqueSphereMaterial;
     }
 }

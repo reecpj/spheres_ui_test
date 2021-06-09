@@ -19,17 +19,21 @@ public class SliderOpacityPanel : MonoBehaviour
 
     public void Setup(GameObject sphere, string sphereName)
     {
-        Slider = transform.GetChild(0).GetComponent<Slider>();
-        _sphereGameObject = sphere;
-        _meshRenderer = sphere.GetComponent<MeshRenderer>();
+        // get sphere mesh renderer and game object
+        _meshRenderer = sphere.GetComponentInChildren<MeshRenderer>();
+        _sphereGameObject = _meshRenderer.gameObject;
+
+        // setup slider with opacity
+        Slider = GetComponentInChildren<Slider>();
         Slider.onValueChanged.AddListener(ChangeSphereOpacity);
-        // set up button text
-        var textButton = transform.GetChild(1);
+
+        // set up name label
         name = $"Slider ({sphereName})";
-        textButton.GetChild(0).GetComponent<Text>().text = sphereName;
+        GetComponentInChildren<Text>().text = sphereName;
+
         // setup transition button
-        var button = textButton.GetComponent<Button>();
-        button.onClick.AddListener((() => HelperFunctions.StartSliderTransition
+        var transitionButton = GetComponentInChildren<Button>();
+        transitionButton.onClick.AddListener((() => HelperFunctions.StartSliderTransition
             (ref _transitionRoutine, this, Slider)));
     }
 
