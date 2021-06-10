@@ -1,4 +1,5 @@
-﻿using System.Collections;
+﻿using System;
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
@@ -12,13 +13,21 @@ public class SliderOpacityPanel : MonoBehaviour
 {
     private GameObject _sphereGameObject;
     private MeshRenderer _meshRenderer;
-    private Material _opaqueMaterial; // shared reference to reduce draw calls
-    private Material _fadeMaterial; // unique reference generated from above
-    public Slider Slider { get; private set; }
-    private Coroutine _transitionRoutine;
 
-    public void Setup(GameObject sphere, string sphereName)
+    private SphereOpacitySystem _sphereOpacitySystem;
+
+    public Slider Slider { get; private set; }
+    public Button TransitionButton { get; private set; }
+
+    private Coroutine _transitionRoutine;
+    public Coroutine TransitionRoutine => _transitionRoutine;
+
+    private byte _oldOpacity;
+
+    public void Setup(GameObject sphere, string sphereName, SphereOpacitySystem sphereOpacitySystem)
     {
+        _sphereOpacitySystem = sphereOpacitySystem;
+
         // get sphere mesh renderer and game object
         _meshRenderer = sphere.GetComponentInChildren<MeshRenderer>();
         _sphereGameObject = _meshRenderer.gameObject;
@@ -26,46 +35,40 @@ public class SliderOpacityPanel : MonoBehaviour
         // setup slider with opacity
         Slider = GetComponentInChildren<Slider>();
         Slider.onValueChanged.AddListener(ChangeSphereOpacity);
+        
+        // ensure initial material
+        ChangeSphereOpacity(Slider.value);
 
         // set up name label
         name = $"Slider ({sphereName})";
         GetComponentInChildren<Text>().text = sphereName;
 
         // setup transition button
-        var transitionButton = GetComponentInChildren<Button>();
-        transitionButton.onClick.AddListener((() => HelperFunctions.StartSliderTransition
-            (ref _transitionRoutine, this, Slider)));
+        TransitionButton = GetComponentInChildren<Button>();
+        TransitionButton.onClick.AddListener(() =>
+        {
+            HelperFunctions.StartSliderTransition
+                (ref _transitionRoutine, Slider, TransitionButton);
+        });
     }
 
-    public void ChangeMaterial(Material opaqueMaterial, Shader fadeShader)
+    public void ChangeSphereOpacity(float newOpacity)
     {
-        _opaqueMaterial = opaqueMaterial;
-        // create a new fade material from the opaque material
-        _fadeMaterial = new Material(opaqueMaterial);
-        _fadeMaterial.shader = fadeShader;
-        // update the material on the object
-        ChangeSphereOpacity(Slider.value);
-    }
-
-    public void ChangeSphereOpacity(float o)
-    {
-        o = Mathf.Clamp01(o);
-        bool opacityNotZero = Mathf.Approximately(o, 0) == false;
+        newOpacity = Mathf.Clamp01(newOpacity);
+        bool opacityNotZero = Mathf.Approximately(newOpacity, 0) == false;
         _sphereGameObject.SetActive(opacityNotZero);
+        byte newOpacityAsByte = (byte) (newOpacity * Constants.MaxOpacityByteValue);
         if (opacityNotZero)
         {
-            if (Mathf.Approximately(o, 1))
-            {
-                // switch to shared opaque material
-                _meshRenderer.sharedMaterial = _opaqueMaterial;
-            }
-            else
-            {
-                // switch to sphere-specific fade material and set opacity
-                var c = _fadeMaterial.color;
-                _fadeMaterial.color = new Color(c.r, c.g, c.b, o);
-                _meshRenderer.material = _fadeMaterial;
-            }
+            // switch to shared material provided
+            _meshRenderer.sharedMaterial = _sphereOpacitySystem.SwitchToMaterialUsingOpacity(_oldOpacity, newOpacityAsByte);
         }
+
+        _oldOpacity = newOpacityAsByte;
+    }
+
+    public void UpdateMaterial()
+    {
+        _meshRenderer.sharedMaterial = _sphereOpacitySystem.GetSphereMaterial(_oldOpacity);
     }
 }

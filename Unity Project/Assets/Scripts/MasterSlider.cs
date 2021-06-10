@@ -8,38 +8,62 @@ using UnityEngine.UI;
 /// </summary>
 public class MasterSlider : MonoBehaviour
 {
-    private Slider _slider;
+    private Slider _masterSlider;
     private Coroutine _transitionRoutine;
 
-    private List<SliderOpacityPanel> _opacityPanels;
+    // keep a reference to the main list of opacity sliders to control
+    private List<SliderOpacityPanel> _childSliderPanels;
 
-    void Start()
-    {
-        _slider = GetComponentInChildren<Slider>();
-        _slider.onValueChanged.AddListener(ChangeChildSliders);
-        var button = GetComponentInChildren<Button>();
-        button.onClick.AddListener((() => HelperFunctions.StartSliderTransition
-            (ref _transitionRoutine, this, _slider)));
-    }
-
-    void OnDestroy()
-    {
-        _slider.onValueChanged.RemoveAllListeners();
-        var button = GetComponentInChildren<Button>();
-        button.onClick.RemoveAllListeners();
-    }
-
-    public void ChangeChildSliders(float t)
+    private void Start()
     {
 
-        foreach (var child in _opacityPanels)
+        _masterSlider = GetComponentInChildren<Slider>();
+        _masterSlider.onValueChanged.AddListener(ChangeChildSliders);
+
+        var transitionButton = GetComponentInChildren<Button>();
+        transitionButton.onClick.AddListener(() =>
         {
-            child.Slider.value = t;
+            // stop all existing transitions to avoid glitchy animation
+            foreach (var childSlider in _childSliderPanels)
+            {
+                var currentTransitionRoutine = childSlider.TransitionRoutine;
+                if (currentTransitionRoutine != null)
+                {
+                    childSlider.Slider.StopCoroutine(currentTransitionRoutine);
+                }
+            }
+            AllowChildSliderInteraction(false);
+            HelperFunctions.StartSliderTransition(ref _transitionRoutine, _masterSlider, transitionButton, 
+                () => { AllowChildSliderInteraction(true); });
+        });
+    }
+
+    private void AllowChildSliderInteraction(bool allow)
+    {
+        foreach (var panel in _childSliderPanels)
+        {
+            panel.Slider.enabled = allow;
+            panel.TransitionButton.enabled = allow;
+        }
+    }
+
+    private void ChangeChildSliders(float newSliderValue)
+    {
+        foreach (var child in _childSliderPanels)
+        {
+            child.Slider.value = newSliderValue;
         }
     }
 
     public void Setup(List<SliderOpacityPanel> opacityPanels)
     {
-        _opacityPanels = opacityPanels;
+        _childSliderPanels = opacityPanels;
+    }
+
+    private void OnDestroy()
+    {
+        _masterSlider.onValueChanged.RemoveAllListeners();
+        var button = GetComponentInChildren<Button>();
+        button.onClick.RemoveAllListeners();
     }
 }

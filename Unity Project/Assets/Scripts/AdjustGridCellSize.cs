@@ -32,46 +32,50 @@ public class AdjustGridCellSize : MonoBehaviour
             _rectTransform = GetComponent<RectTransform>();
             StoreSphereTransforms();
         }
+        // get usable canvas size for grid
         var rectSize = _rectTransform.rect.size;
-        float rectArea = rectSize.x * rectSize.y;
-        float rectAspectRatio = rectSize.x / rectSize.y;
-
+        var padding = _gridLayoutGroup.padding;
+        rectSize.x -= padding.left - padding.right;
+        rectSize.y -= padding.bottom - padding.top;
 
         // get roughly how many spheres would fit on each side
         // of the grid
-        float squareRootNumCells = Mathf.Sqrt(_numCells);
-        // take the average of the aspect ratio and 1, so the following
-        // numbers of cells are split fairly evenly between the two axes
-        float rectAspectRatioSplit = (rectAspectRatio + 1) * 0.5f;
-        var numHorizontalCells = Mathf.RoundToInt(squareRootNumCells * rectAspectRatioSplit);
-        var numVerticalCells = Mathf.RoundToInt(squareRootNumCells / rectAspectRatioSplit);
+        float rectAspectRatio = rectSize.x / rectSize.y;
+        float roughNumColumns = Mathf.Sqrt(_numCells*rectAspectRatio);
+        float roughtNumRows = Mathf.Sqrt(_numCells/rectAspectRatio);
+        var numColumns = Mathf.FloorToInt(roughNumColumns);
+        var numRows = Mathf.FloorToInt(roughtNumRows);
 
-        // product of width and height may not cover all required cells
-        if (numHorizontalCells * numVerticalCells < _numCells)
+        // product of the estimated numbers of rows and columns
+        // may not be enough to cover all required cells
+        while (numColumns * numRows < _numCells)
         {
             // if not, increase the lower of the two numbers,
             // to increase their product as much as possible
             if (rectSize.x > rectSize.y)
             {
-                numVerticalCells++;
+                numRows++;
             }
             else
             {
-                numHorizontalCells++;
+                numColumns++;
             }
         }
 
-        // set the number of rows for the grid layout
-        _gridLayoutGroup.constraintCount = numVerticalCells;
+        // set the number of rows for the grid layout -
+        // Unity calculates number of columns from this
+        _gridLayoutGroup.constraintCount = numRows;
 
         // get the new cell size in pixels for the canvas
-        var cellSizeFromWidth = rectSize.x / numHorizontalCells;
-        var cellSizeFromHeight = rectSize.y / numVerticalCells;
+        // using the smaller of the two available options
+        var cellSizeFromWidth = rectSize.x / numColumns;
+        var cellSizeFromHeight = rectSize.y / numRows;
         var cellSize = Mathf.Min(cellSizeFromWidth, cellSizeFromHeight);
+        // make it smaller so some space between the cells is possible
         cellSize -= _gridLayoutGroup.spacing.x;
         _gridLayoutGroup.cellSize = new Vector2(cellSize, cellSize);
 
-        // update the visual mesh
+        // update the visual sphere meshes to be the correct size
         var sphereScale = new Vector3(cellSize, cellSize, cellSize);
         foreach (var sphereTransform in _sphereTransforms)
         {
