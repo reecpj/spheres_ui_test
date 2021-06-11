@@ -9,8 +9,19 @@ using UnityEngine.UI;
 /// </summary>
 public class HelperFunctions
 {
+    /// <summary>
+    /// Start a coroutine to transition the slider to one end or the other
+    /// based on the current value. At the end, an action may be run.
+    /// The coroutine runs on the slider MonoBehaviour.
+    /// </summary>
+    /// <param name="transitionRoutine">a reference to the same transition,
+    /// if started previously. Will be stopped before the new one starts to
+    /// avoid both setting the slider value at once. This reference is set
+    /// to the new transition coroutine.</param>
+    /// <param name="slider">slider with arbitrary min and max values</param>
+    /// <param name="onTransitionFinished">Optional action to run after transition finishes</param>
     public static void StartSliderTransition(ref Coroutine transitionRoutine, 
-        Slider slider, Button transitionButton, Action onTransitionFinished = null)
+        Slider slider, Action onTransitionFinished = null)
     {
         if(transitionRoutine != null)
             slider.StopCoroutine(transitionRoutine);
@@ -24,7 +35,8 @@ public class HelperFunctions
         // otherwise transition to the start
         var initValue = slider.value;
         var fractionSlid = Mathf.InverseLerp(slider.minValue, slider.maxValue, initValue);
-        var goingUp = fractionSlid < 0.5f;
+        const float halfwayPoint = 0.5f;
+        var goingUp = fractionSlid < halfwayPoint;
         float finalValue = goingUp ? slider.maxValue : slider.minValue;
 
         // disable interactivity to avoid fighting with the user

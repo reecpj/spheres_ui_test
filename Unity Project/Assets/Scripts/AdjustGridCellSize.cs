@@ -4,6 +4,12 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
 
+/// <summary>
+/// Adjusts the cell size of the Grid Layout Group component
+/// to ensure all grid cells fit on screen, as well as determining
+/// the number of rows to best fit the UI element's size.
+/// Sets the spheres on each cell to be that cell size
+/// </summary>
 [RequireComponent(typeof(GridLayoutGroup))]
 public class AdjustGridCellSize : MonoBehaviour
 {
@@ -20,6 +26,7 @@ public class AdjustGridCellSize : MonoBehaviour
     public void UpdateNumCells(int numCells)
     {
         _numCells = numCells;
+        // cache the sphere transforms in each cell for performance when resizing
         StoreSphereTransforms();
         AdjustCellSize();
     }
@@ -52,7 +59,7 @@ public class AdjustGridCellSize : MonoBehaviour
         {
             // if not, increase the lower of the two numbers,
             // to increase their product as much as possible
-            if (rectSize.x > rectSize.y)
+            if (numColumns > numRows)
             {
                 numRows++;
             }
@@ -76,16 +83,28 @@ public class AdjustGridCellSize : MonoBehaviour
         _gridLayoutGroup.cellSize = new Vector2(cellSize, cellSize);
 
         // update the visual sphere meshes to be the correct size
+        // avoid bad scale values
+        if (float.IsInfinity(cellSize))
+            return;
         var sphereScale = new Vector3(cellSize, cellSize, cellSize);
         foreach (var sphereTransform in _sphereTransforms)
         {
             sphereTransform.localScale = sphereScale;
         }
     }
+
+    void OnDestroy()
+    {
+        // AdjustCellSize can be called after OnDestroy,
+        // in which case trying to scale the spheres causes
+        // a null reference error. This fixes the problem.
+        _sphereTransforms = null;
+    }
+    
+    // Store an array of the sphere's transforms, so that resizing the window
+    // does not have to spend the time getting the sphere mesh
     private void StoreSphereTransforms()
     {
-        // Store an array of the sphere's transforms, so that resizing the window
-        // does not have to spend the time getting the sphere mesh
         var sphereMeshes = GetComponentsInChildren<MeshRenderer>();
 
         var numSpheres = sphereMeshes.Length;

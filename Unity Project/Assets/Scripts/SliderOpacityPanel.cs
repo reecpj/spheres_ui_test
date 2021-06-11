@@ -48,7 +48,7 @@ public class SliderOpacityPanel : MonoBehaviour
         TransitionButton.onClick.AddListener(() =>
         {
             HelperFunctions.StartSliderTransition
-                (ref _transitionRoutine, Slider, TransitionButton);
+                (ref _transitionRoutine, Slider);
         });
     }
 
@@ -56,17 +56,27 @@ public class SliderOpacityPanel : MonoBehaviour
     {
         newOpacity = Mathf.Clamp01(newOpacity);
         bool opacityNotZero = Mathf.Approximately(newOpacity, 0) == false;
+
+        // turn off game object when opacity is 0
         _sphereGameObject.SetActive(opacityNotZero);
+
+        // get a material with the required opacity
         byte newOpacityAsByte = (byte) (newOpacity * Constants.MaxOpacityByteValue);
         if (opacityNotZero)
         {
-            // switch to shared material provided
-            _meshRenderer.sharedMaterial = _sphereOpacitySystem.SwitchToMaterialUsingOpacity(_oldOpacity, newOpacityAsByte);
+            _meshRenderer.sharedMaterial = _sphereOpacitySystem.
+                SwitchToMaterialUsingOpacity(_oldOpacity, newOpacityAsByte);
         }
 
+        // store old opacity byte for counting references to materials
         _oldOpacity = newOpacityAsByte;
     }
 
+    /// <summary>
+    /// Just update the material, don't change the opacity.
+    /// The sphere system has a material for that opacity, so the reference counts on that class do not
+    /// change.
+    /// </summary>
     public void UpdateMaterial()
     {
         _meshRenderer.sharedMaterial = _sphereOpacitySystem.GetSphereMaterial(_oldOpacity);

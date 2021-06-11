@@ -4,7 +4,8 @@ using UnityEngine;
 using UnityEngine.UI;
 
 /// <summary>
-/// Control all the other sliders
+/// Control all the other sliders, using a master slider.
+/// A button transitions the master slider
 /// </summary>
 public class MasterSlider : MonoBehaviour
 {
@@ -16,10 +17,11 @@ public class MasterSlider : MonoBehaviour
 
     private void Start()
     {
-
+        // set up master slider
         _masterSlider = GetComponentInChildren<Slider>();
         _masterSlider.onValueChanged.AddListener(ChangeChildSliders);
 
+        // set up transition button to transition master slider
         var transitionButton = GetComponentInChildren<Button>();
         transitionButton.onClick.AddListener(() =>
         {
@@ -32,18 +34,21 @@ public class MasterSlider : MonoBehaviour
                     childSlider.Slider.StopCoroutine(currentTransitionRoutine);
                 }
             }
+
+            // avoid child sliders changing values while the master is in control
             AllowChildSliderInteraction(false);
-            HelperFunctions.StartSliderTransition(ref _transitionRoutine, _masterSlider, transitionButton, 
+            HelperFunctions.StartSliderTransition(ref _transitionRoutine, _masterSlider, 
+                // re-enable slider interaction after transition has ended
                 () => { AllowChildSliderInteraction(true); });
         });
     }
 
     private void AllowChildSliderInteraction(bool allow)
     {
-        foreach (var panel in _childSliderPanels)
+        foreach (var child in _childSliderPanels)
         {
-            panel.Slider.enabled = allow;
-            panel.TransitionButton.enabled = allow;
+            child.Slider.enabled = allow;
+            child.TransitionButton.enabled = allow;
         }
     }
 
