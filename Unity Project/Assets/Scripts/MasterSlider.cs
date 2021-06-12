@@ -4,34 +4,71 @@ using UnityEngine;
 using UnityEngine.UI;
 
 /// <summary>
-/// Control all the other sliders
+/// Control all the other sliders, using a master slider.
+/// A button transitions the master slider
 /// </summary>
 public class MasterSlider : MonoBehaviour
 {
-    private Slider _slider;
+    private Slider _masterSlider;
     private Coroutine _transitionRoutine;
 
-    private SliderOpacityPanel[] _opacityPanels;
+    // keep a reference to the main list of opacity sliders to control
+    private List<SliderOpacityPanel> _childSliderPanels;
 
-    void Start()
+    private void Start()
     {
-        _slider = transform.GetChild(0).GetComponent<Slider>();
-        _slider.onValueChanged.AddListener(ChangeChildSliders);
-        var button = transform.GetChild(1).GetComponent<Button>();
-        button.onClick.AddListener((() => HelperFunctions.StartSliderTransition
-            (ref _transitionRoutine, this, _slider)));
+        // set up master slider
+        _masterSlider = GetComponentInChildren<Slider>();
+        _masterSlider.onValueChanged.AddListener(ChangeChildSliders);
+
+        // set up transition button to transition master slider
+        var transitionButton = GetComponentInChildren<Button>();
+        transitionButton.onClick.AddListener(() =>
+        {
+            // stop all existing transitions to avoid glitchy animation
+            foreach (var childSlider in _childSliderPanels)
+            {
+                var currentTransitionRoutine = childSlider.TransitionRoutine;
+                if (currentTransitionRoutine != null)
+                {
+                    childSlider.Slider.StopCoroutine(currentTransitionRoutine);
+                }
+            }
+
+            // avoid child sliders changing values while the master is in control
+            AllowChildSliderInteraction(false);
+            HelperFunctions.StartSliderTransition(ref _transitionRoutine, _masterSlider, 
+                // re-enable slider interaction after transition has ended
+                () => { AllowChildSliderInteraction(true); });
+        });
     }
 
-    public void ChangeChildSliders(float t)
+    private void AllowChildSliderInteraction(bool allow)
     {
-        foreach (var child in _opacityPanels)
+        foreach (var child in _childSliderPanels)
         {
-            child.Slider.value = t;
+            child.Slider.enabled = allow;
+            child.TransitionButton.enabled = allow;
         }
     }
 
-    public void Setup(SliderOpacityPanel[] opacityPanels)
+    private void ChangeChildSliders(float newSliderValue)
     {
-        _opacityPanels = opacityPanels;
+        foreach (var child in _childSliderPanels)
+        {
+            child.Slider.value = newSliderValue;
+        }
+    }
+
+    public void Setup(List<SliderOpacityPanel> opacityPanels)
+    {
+        _childSliderPanels = opacityPanels;
+    }
+
+    private void OnDestroy()
+    {
+        _masterSlider.onValueChanged.RemoveAllListeners();
+        var button = GetComponentInChildren<Button>();
+        button.onClick.RemoveAllListeners();
     }
 }

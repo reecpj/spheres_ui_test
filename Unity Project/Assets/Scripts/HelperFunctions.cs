@@ -1,4 +1,5 @@
-﻿using System.Collections;
+﻿using System;
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
@@ -8,47 +9,61 @@ using UnityEngine.UI;
 /// </summary>
 public class HelperFunctions
 {
-    // Function found in https://forum.unity.com/threads/canvasscaler-current-scale.285134/#post-3591418
-    // Presumably what Unity uses in its canvas scaler with Match Width and Height.
-    public static float GetUiScaleFactor(Vector2 screenSize, Vector2 m_ReferenceResolution, float m_MatchWidthOrHeight)
-    {
-        // We take the log of the relative width and height before taking the average.
-        // Then we transform it back in the original space.
-        // the reason to transform in and out of logarithmic space is to have better behavior.
-        // If one axis has twice resolution and the other has half, it should even out if widthOrHeight value is at 0.5.
-        // In normal space the average would be (0.5 + 2) / 2 = 1.25
-        // In logarithmic space the average is (-1 + 1) / 2 = 0
-        const int kLogBase = 2;
-        float logWidth = Mathf.Log(screenSize.x / m_ReferenceResolution.x, kLogBase);
-        float logHeight = Mathf.Log(screenSize.y / m_ReferenceResolution.y, kLogBase);
-        float logWeightedAverage = Mathf.Lerp(logWidth, logHeight, m_MatchWidthOrHeight);
-        float scaleFactor = Mathf.Pow(kLogBase, logWeightedAverage);
-        return scaleFactor;
-    }
-
+    /// <summary>
+    /// Start a coroutine to transition the slider to one end or the other
+    /// based on the current value. At the end, an action may be run.
+    /// The coroutine runs on the slider MonoBehaviour.
+    /// </summary>
+    /// <param name="transitionRoutine">a reference to the same transition,
+    /// if started previously. Will be stopped before the new one starts to
+    /// avoid both setting the slider value at once. This reference is set
+    /// to the new transition coroutine.</param>
+    /// <param name="slider">slider with arbitrary min and max values</param>
+    /// <param name="onTransitionFinished">Optional action to run after transition finishes</param>
     public static void StartSliderTransition(ref Coroutine transitionRoutine, 
-        MonoBehaviour monoBehaviour, Slider slider)
+        Slider slider, Action onTransitionFinished = null)
     {
-        if (transitionRoutine != null)
-            monoBehaviour.StopCoroutine(transitionRoutine);
-        transitionRoutine = monoBehaviour.StartCoroutine(SmoothTransitionSlider(slider));
+        if(transitionRoutine != null)
+            slider.StopCoroutine(transitionRoutine);
+        transitionRoutine = slider.StartCoroutine(
+            SmoothTransitionSlider(slider, SphereOpacitySystem.TransitionSeconds, onTransitionFinished));
     }
 
-    public static IEnumerator SmoothTransitionSlider(Slider slider)
+    public static IEnumerator SmoothTransitionSlider(Slider slider, float transitionSeconds, Action onTransitionFinished)
     {
+        // if the slider is closer to the start, transition to the end,
+        // otherwise transition to the start
         var initValue = slider.value;
-        var goingUp = initValue < 0.5f;
-        // disable to avoid fighting with the user
+        var fractionSlid = Mathf.InverseLerp(slider.minValue, slider.maxValue, initValue);
+        const float halfwayPoint = 0.5f;
+        var goingUp = fractionSlid < halfwayPoint;
+        float finalValue = goingUp ? slider.maxValue : slider.minValue;
+
+        // disable interactivity to avoid fighting with the user
         slider.enabled = false;
-        float finalValue = goingUp ? 1 : 0;
-        // transition over 1 second to the final value
-        for (float t = 0; t <= 1; t += Time.deltaTime)
+        // avoid dividing by zero (or negative durations)
+        transitionSeconds = Mathf.Max(transitionSeconds, float.Epsilon);
+
+        // transition from initValue to finalValue over transitionSeconds
+        // how much between 0 and 1 to transition each frame
+        float deltaTransition;
+        for (float transitionAmount = 0; transitionAmount <= 1; transitionAmount += deltaTransition)
         {
-            slider.value = Mathf.Lerp(initValue, finalValue, t);
+            // avoid overshooting past the finalValue, if transitionSeconds is very small
+            transitionAmount = Mathf.Min(transitionAmount, 1);
+
+            // interpolate linearly
+            slider.value = Mathf.Lerp(initValue, finalValue, transitionAmount);
+            // wait a frame
             yield return null;
+            deltaTransition = Time.deltaTime / transitionSeconds;
         }
+
         // don't leave t hanging just short of its finalValue
         slider.value = finalValue;
         slider.enabled = true;
+
+        // allow a final action when the slider reaches its destination
+        onTransitionFinished?.Invoke();
     }
 }
